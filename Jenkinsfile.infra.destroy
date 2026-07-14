@@ -3,21 +3,61 @@ pipeline {
 
     environment {
         AWS_DEFAULT_REGION    = 'ap-south-1' 
+        EKS_CLUSTER_NAME      = 'production-eks-cluster'
+        NODE_GROUP_NAME       = 'production-worker-nodes'
         
         AWS_ACCESS_KEY_ID     = credentials('AWS_ACCESS_KEY_ID')
         AWS_SECRET_ACCESS_KEY = credentials('AWS_SECRET_ACCESS_KEY')
     }
 
     stages {
+        stage('Disk Cleanup') {
+            steps {
+                echo 'Clearing space inside Jenkins context...'
+                sh "docker system prune -f || true"
+            }
+        }
+
         stage('Checkout Source') {
             steps {
                 checkout scm
             }
         }
 
-        stage('Terraform Destroy') {
+        stage('Teardown EKS Compute') {
             steps {
-                echo '⚠️ WARNING: Initiating complete infrastructure teardown...'
+                echo '⚠️ Initiating AWS CLI teardown of EKS Node Groups...'
+                sh """
+                if aws eks describe-nodegroup --cluster-name ${EKS_CLUSTER_NAME} --nodegroup-name ${NODE_GROUP_NAME} --region ${AWS_DEFAULT_REGION} >/dev/null 2>&1; then
+                    aws eks delete-nodegroup --cluster-name ${EKS_CLUSTER_NAME} --nodegroup-name ${NODE_GROUP_NAME} --region ${AWS_DEFAULT_REGION}
+                    echo 'Waiting for EKS Node Group to be completely deleted (5-7 mins)...'
+                    aws eks wait nodegroup-deleted --cluster-name ${EKS_CLUSTER_NAME} --nodegroup-name ${NODE_GROUP_NAME} --region ${AWS_DEFAULT_REGION}
+                else
+                    echo 'Node group already deleted or does not exist.'
+                fi
+                """
+            }
+        }
+
+        stage('Teardown EKS Control Plane') {
+            steps {
+                echo '⚠️ Initiating AWS CLI teardown of EKS Cluster...'
+                sh """
+                if aws eks describe-cluster --name ${EKS_CLUSTER_NAME} --region ${AWS_DEFAULT_REGION} >/dev/null 2>&1; then
+                    aws eks delete-cluster --name ${EKS_CLUSTER_NAME} --region ${AWS_DEFAULT_REGION}
+                    echo 'Waiting for EKS Cluster control plane to be completely deleted (5-7 mins)...'
+                    aws eks wait cluster-deleted --name ${EKS_CLUSTER_NAME} --region ${AWS_DEFAULT_REGION}
+                else
+                    echo 'EKS Cluster already deleted or does not exist.'
+                fi
+                """
+            }
+        }
+
+        stage('Terraform Teardown Remaining') {
+            steps {
+                echo 'Initializing clean minimal provider configuration to clear stray networking resources...'
+                sh "rm -rf .terraform* terraform.tfstate*"
                 sh "terraform init"
                 sh "terraform destroy -auto-approve"
             }
