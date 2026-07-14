@@ -76,11 +76,6 @@ resource "aws_iam_role" "eks_cluster_role" {
       Principal = { Service = "eks.amazonaws.com" }
     }]
   })
-})
-
-resource "aws_iam_role_policy_attachment" "eks_cluster_policy" {
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
-  role       = aws_iam_role.eks_cluster_role.name
 }
 
 # IAM Role for Worker Node Groups
@@ -95,7 +90,12 @@ resource "aws_iam_role" "eks_node_role" {
       Principal = { Service = "ec2.amazonaws.com" }
     }]
   })
-})
+}
+
+resource "aws_iam_role_policy_attachment" "eks_cluster_policy" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
+  role       = aws_iam_role.eks_cluster_role.name
+}
 
 resource "aws_iam_role_policy_attachment" "eks_worker_node_policy" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
@@ -155,7 +155,7 @@ resource "aws_eks_node_group" "node_pool" {
     min_size     = 1
   }
 
-  instance_types = ["t3.medium"] # t3.medium provides stable performance for cluster operators
+  instance_types = ["t3.medium"] # Standard cluster performance layout
 
   depends_on = [
     aws_iam_role_policy_attachment.eks_worker_node_policy,
