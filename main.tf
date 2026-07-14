@@ -155,7 +155,7 @@ resource "aws_eks_node_group" "node_pool" {
     min_size     = 1
   }
 
-  instance_types = ["t3.medium"] # Standard cluster performance layout
+  instance_types = ["t3.micro"] # Standard cluster performance layout
 
   depends_on = [
     aws_iam_role_policy_attachment.eks_worker_node_policy,
